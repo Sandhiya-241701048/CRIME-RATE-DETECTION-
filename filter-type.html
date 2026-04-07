@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Filter by Crime Type — Crime Rate Detection</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h2 class="page-title">Filter by Crime Type</h2>
+    <p class="page-subtitle">Analyse a specific type of crime across all locations</p>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-body">
+        <div class="filter-bar">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Crime Type</label>
+            <select id="type-select">
+              <option value="">-- Choose a crime type --</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="filterByType()" style="width:auto;padding:10px 20px;">🔍 Search</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="results-section" class="hidden">
+      <div class="stats-grid" style="margin-bottom:24px;">
+        <div class="stat-card danger"> <div class="label">Total Incidents</div><div class="value" id="r-total">—</div></div>
+        <div class="stat-card info">   <div class="label">Records Found</div> <div class="value" id="r-count">—</div></div>
+        <div class="stat-card warning"><div class="label">Cities Affected</div><div class="value" id="r-cities">—</div></div>
+      </div>
+
+      <!-- Location Breakdown -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Affected Locations</h3></div>
+        <div class="card-body"><div class="bar-chart" id="loc-chart"></div></div>
+      </div>
+
+      <!-- Records Table -->
+      <div class="card">
+        <div class="card-header"><h3 id="table-title">Crime Records</h3></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Location</th><th>District</th><th>Date</th><th>Hour</th><th>Count</th></tr></thead>
+            <tbody id="records-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/common.js"></script>
+<script>
+  initPage("type");
+
+  async function loadTypes() {
+    const res  = await fetch(`${API}/api/analysis/summary`, { credentials: "include" });
+    const data = await res.json();
+    const sel  = document.getElementById("type-select");
+    data.crime_types.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = opt.textContent = t;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function filterByType() {
+    const type = document.getElementById("type-select").value;
+    if (!type) { alert("Please select a crime type."); return; }
+
+    const res  = await fetch(`${API}/api/analysis/filter/type?type=${encodeURIComponent(type)}`, { credentials: "include" });
+    const data = await res.json();
+
+    document.getElementById("results-section").classList.remove("hidden");
+    document.getElementById("r-total").textContent = data.total;
+    document.getElementById("r-count").textContent = data.count;
+
+    const cities = [...new Set(data.results.map(r => r.location))];
+    document.getElementById("r-cities").textContent = cities.length;
+    document.getElementById("table-title").textContent = `Records — ${type}`;
+
+    // Location breakdown chart
+    const byLoc = {};
+    data.results.forEach(r => { byLoc[r.location] = (byLoc[r.location]||0) + r.count; });
+    const max = Math.max(...Object.values(byLoc), 1);
+    document.getElementById("loc-chart").innerHTML = Object.entries(byLoc)
+      .sort((a,b) => b[1]-a[1]).map(([loc, count]) => `
+        <div class="bar-row">
+          <div class="bar-label">${loc}</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${Math.round(count/max*100)}%;background:var(--primary)">
+              <span>${count}</span>
+            </div>
+          </div>
+        </div>`).join("");
+
+    document.getElementById("records-body").innerHTML = data.results.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td><strong>${r.location}</strong></td>
+        <td>${r.district}</td>
+        <td>${r.date}</td>
+        <td>${r.hour}:00</td>
+        <td><strong>${r.count}</strong></td>
+      </tr>`).join("");
+  }
+
+  loadTypes();
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dataset Management — Crime Rate Detection</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h2 class="page-title">Dataset Management</h2>
+    <p class="page-subtitle">Upload, validate, and manage crime datasets</p>
+
+    <!-- Upload Zone -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>Upload New Dataset</h3></div>
+      <div class="card-body">
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <div class="icon">📁</div>
+          <p><strong>Click to upload</strong> or drag and drop</p>
+          <p>CSV files only · Required columns: location, type, date, count</p>
+        </div>
+        <input type="file" id="file-input" accept=".csv,.json" style="display:none" onchange="handleFileSelect(this)"/>
+        <div id="upload-status" class="hidden" style="margin-top:14px;"></div>
+        <div id="selected-file" style="margin-top:12px;font-size:14px;color:var(--muted);"></div>
+        <button class="btn-primary" id="upload-btn" style="margin-top:14px;width:auto;padding:10px 24px;display:none" onclick="uploadFile()">⬆ Upload Dataset</button>
+      </div>
+    </div>
+
+    <!-- CSV Format Guide -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>📋 Required CSV Format</h3></div>
+      <div class="card-body">
+        <p style="font-size:14px;color:var(--muted);margin-bottom:12px;">Your CSV file must have these columns:</p>
+        <table>
+          <thead><tr><th>Column</th><th>Example</th><th>Required</th></tr></thead>
+          <tbody>
+            <tr><td><code>location</code></td><td>Chennai</td><td>✅ Yes</td></tr>
+            <tr><td><code>district</code></td><td>T Nagar</td><td>No</td></tr>
+            <tr><td><code>type</code></td><td>Theft</td><td>✅ Yes</td></tr>
+            <tr><td><code>date</code></td><td>2024-01-15</td><td>✅ Yes</td></tr>
+            <tr><td><code>count</code></td><td>25</td><td>✅ Yes</td></tr>
+            <tr><td><code>hour</code></td><td>22</td><td>No (default: 20)</td></tr>
+            <tr><td><code>month</code></td><td>1</td><td>No (auto-detected)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Uploaded Datasets -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Uploaded Datasets</h3>
+        <button class="btn-secondary" onclick="loadDatasets()" style="padding:6px 14px;font-size:13px;">🔄 Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Filename</th><th>Records Loaded</th><th>Uploaded At</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="datasets-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/common.js"></script>
+<script>
+  initPage("dataset");
+
+  let selectedFile = null;
+
+  function handleFileSelect(input) {
+    selectedFile = input.files[0];
+    if (selectedFile) {
+      document.getElementById("selected-file").textContent = `Selected: ${selectedFile.name} (${(selectedFile.size/1024).toFixed(1)} KB)`;
+      document.getElementById("upload-btn").style.display = "inline-block";
+    }
+  }
+
+  // Drag and drop
+  const dropZone = document.getElementById("drop-zone");
+  dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.style.borderColor = "var(--primary)"; });
+  dropZone.addEventListener("dragleave", () => dropZone.style.borderColor = "");
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.style.borderColor = "";
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      selectedFile = file;
+      document.getElementById("selected-file").textContent = `Selected: ${file.name}`;
+      document.getElementById("upload-btn").style.display = "inline-block";
+    }
+  });
+
+  async function uploadFile() {
+    if (!selectedFile) return;
+    const statusDiv = document.getElementById("upload-status");
+    statusDiv.innerHTML = `<div class="success-banner">Uploading and validating...</div>`;
+    statusDiv.classList.remove("hidden");
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res  = await fetch(`${API}/api/dataset/upload`, { method: "POST", credentials: "include", body: formData });
+      const data = await res.json();
+      if (res.ok) {
+        statusDiv.innerHTML = `<div class="success-banner">✅ ${data.message}</div>`;
+        document.getElementById("upload-btn").style.display = "none";
+        document.getElementById("selected-file").textContent = "";
+        selectedFile = null;
+        loadDatasets();
+      } else {
+        statusDiv.innerHTML = `<div class="error-banner">❌ ${data.error}</div>`;
+      }
+    } catch {
+      statusDiv.innerHTML = `<div class="error-banner">❌ Upload failed. Check backend connection.</div>`;
+    }
+  }
+
+  async function deleteDataset(id, name) {
+    if (!confirm(`Delete "${name}"?`)) return;
+    const res = await fetch(`${API}/api/dataset/delete/${id}`, { method: "DELETE", credentials: "include" });
+    const d   = await res.json();
+    if (res.ok) loadDatasets();
+    else alert(d.error);
+  }
+
+  async function loadDatasets() {
+    const res  = await fetch(`${API}/api/dataset/list`, { credentials: "include" });
+    const data = await res.json();
+    const tbody = document.getElementById("datasets-body");
+    if (!data.datasets.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No datasets uploaded yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.datasets.map(d => `
+      <tr>
+        <td>${d.id}</td>
+        <td><strong>${d.filename}</strong></td>
+        <td>${d.records} records</td>
+        <td>${d.uploaded_at}</td>
+        <td><span class="badge ${d.valid ? 'safe' : 'high'}">${d.valid ? '✅ Valid' : '❌ Invalid'}</span></td>
+        <td><button class="btn-danger" onclick="deleteDataset(${d.id},'${d.filename}')" style="padding:5px 12px;font-size:12px;">🗑 Delete</button></td>
+      </tr>`).join("");
+  }
+
+  loadDatasets();
+</script>
+</body>
+</html>

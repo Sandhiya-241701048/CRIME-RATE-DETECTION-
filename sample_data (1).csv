@@ -1,0 +1,11 @@
+location,district,type,date,count,hour,day_of_week,month
+Chennai,Tambaram,Theft,2024-09-01,12,22,0,9
+Chennai,Anna Nagar,Robbery,2024-09-05,8,23,4,9
+Mumbai,Andheri,Assault,2024-09-08,15,21,6,9
+Delhi,Connaught,Fraud,2024-09-10,20,14,1,9
+Bangalore,Whitefield,Theft,2024-09-12,10,22,2,9
+Hyderabad,Banjara Hills,Robbery,2024-09-15,7,20,3,9
+Chennai,Velachery,Assault,2024-09-18,9,19,4,9
+Mumbai,Bandra,Theft,2024-09-20,18,22,5,9
+Delhi,Lajpat Nagar,Robbery,2024-09-22,14,23,6,9
+Bangalore,Koramangala,Fraud,2024-09-25,6,11,0,9

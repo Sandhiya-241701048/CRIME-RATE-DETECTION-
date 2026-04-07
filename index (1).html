@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — Crime Rate Detection</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-header">
+      <span class="logo">🔍</span>
+      <h1>Crime Rate Detection</h1>
+      <p>Azure-powered crime analysis platform</p>
+    </div>
+
+    <div id="error-msg" class="error-banner hidden"></div>
+
+    <div class="form-group">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="Enter your email"/>
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Enter your password"/>
+    </div>
+
+    <button class="btn-primary" onclick="handleLogin()" id="login-btn">Sign In</button>
+
+    <p class="hint">
+      <strong>Admin:</strong> admin@crime.com / admin123<br/>
+      <strong>User:</strong> user@crime.com / user123
+    </p>
+  </div>
+
+  <script>
+    const API = "http://localhost:5000";
+
+    async function handleLogin() {
+      const email    = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const btn      = document.getElementById("login-btn");
+      const errDiv   = document.getElementById("error-msg");
+      errDiv.classList.add("hidden");
+
+      if (!email || !password) { showError("Please enter email and password."); return; }
+
+      btn.textContent = "Signing in...";
+      btn.disabled    = true;
+
+      try {
+        const res  = await fetch(`${API}/api/auth/login`, {
+          method: "POST", credentials: "include",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          localStorage.setItem("userName", data.name);
+          localStorage.setItem("userRole", data.role);
+          localStorage.setItem("userEmail", data.email);
+          window.location.href = data.role === "admin"
+            ? "pages/admin-dashboard.html"
+            : "pages/user-dashboard.html";
+        } else {
+          showError(data.error || "Login failed.");
+          btn.textContent = "Sign In";
+          btn.disabled    = false;
+        }
+      } catch {
+        showError("Cannot connect to server. Make sure the backend is running on port 5000.");
+        btn.textContent = "Sign In";
+        btn.disabled    = false;
+      }
+    }
+
+    function showError(msg) {
+      const d = document.getElementById("error-msg");
+      d.textContent = msg;
+      d.classList.remove("hidden");
+    }
+
+    document.addEventListener("keydown", e => { if (e.key === "Enter") handleLogin(); });
+  </script>
+</body>
+</html>

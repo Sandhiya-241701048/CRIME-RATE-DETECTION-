@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Reports — Crime Rate Detection</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h2 class="page-title">Generate Reports</h2>
+    <p class="page-subtitle">Create and download crime analysis reports</p>
+
+    <!-- Generate Report Form -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>📄 Generate New Report</h3></div>
+      <div class="card-body">
+        <div class="filter-bar" style="margin-bottom:16px;">
+          <div>
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Report Type</label>
+            <select id="report-type" onchange="toggleFilters()">
+              <option value="full">Full Report (All Data)</option>
+              <option value="location">By Location</option>
+              <option value="type">By Crime Type</option>
+            </select>
+          </div>
+          <div id="loc-filter" style="display:none;">
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Location</label>
+            <select id="report-location">
+              <option value="">-- Choose city --</option>
+            </select>
+          </div>
+          <div id="type-filter" style="display:none;">
+            <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Crime Type</label>
+            <select id="report-crime-type">
+              <option value="">-- Choose type --</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="generateReport()" style="width:auto;padding:10px 20px;">⚡ Generate</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report Preview -->
+    <div id="report-preview" class="hidden">
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header">
+          <h3 id="report-title">Report</h3>
+          <button class="btn-secondary" onclick="downloadReport()" style="padding:7px 16px;font-size:13px;">⬇ Download JSON</button>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px;" id="report-meta"></p>
+
+          <div class="stats-grid" style="margin-bottom:20px;">
+            <div class="stat-card danger"><div class="label">Total Crimes</div><div class="value" id="rp-total">—</div></div>
+            <div class="stat-card info">  <div class="label">Records</div>     <div class="value" id="rp-recs">—</div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+            <div>
+              <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">By Crime Type</h4>
+              <div class="bar-chart" id="rp-type-chart"></div>
+            </div>
+            <div>
+              <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;">By Location</h4>
+              <div class="bar-chart" id="rp-loc-chart"></div>
+            </div>
+          </div>
+
+          <h4 style="font-size:14px;font-weight:600;margin:20px 0 12px;">Monthly Breakdown</h4>
+          <div class="bar-chart" id="rp-month-chart"></div>
+        </div>
+      </div>
+
+      <!-- Records Table in Report -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header"><h3>Detailed Records</h3></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Location</th><th>District</th><th>Crime Type</th><th>Date</th><th>Count</th></tr></thead>
+            <tbody id="rp-records-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Past Reports -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📁 Generated Reports</h3>
+        <button class="btn-secondary" onclick="loadReportsList()" style="padding:6px 14px;font-size:13px;">🔄 Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Title</th><th>Generated At</th><th>Total Crimes</th><th>Action</th></tr></thead>
+          <tbody id="reports-list-body">
+            <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">No reports yet. Generate one above!</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/common.js"></script>
+<script>
+  initPage("reports");
+  let currentReport = null;
+
+  function toggleFilters() {
+    const type = document.getElementById("report-type").value;
+    document.getElementById("loc-filter").style.display  = type === "location" ? "block" : "none";
+    document.getElementById("type-filter").style.display = type === "type"     ? "block" : "none";
+  }
+
+  function makeBarChart(id, entries, labelKey, valueKey, color) {
+    const max = Math.max(...entries.map(e => e[valueKey]), 1);
+    document.getElementById(id).innerHTML = entries.map(e => `
+      <div class="bar-row">
+        <div class="bar-label">${e[labelKey]}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.round(e[valueKey]/max*100)}%;background:${color}">
+            <span>${e[valueKey]}</span>
+          </div>
+        </div>
+      </div>`).join("");
+  }
+
+  async function loadDropdowns() {
+    const res  = await fetch(`${API}/api/analysis/summary`, { credentials:"include" });
+    const data = await res.json();
+    const locSel  = document.getElementById("report-location");
+    const typeSel = document.getElementById("report-crime-type");
+    data.locations.forEach(l => {
+      const o = document.createElement("option"); o.value = o.textContent = l; locSel.appendChild(o);
+    });
+    data.crime_types.forEach(t => {
+      const o = document.createElement("option"); o.value = o.textContent = t; typeSel.appendChild(o);
+    });
+  }
+
+  async function generateReport() {
+    const type      = document.getElementById("report-type").value;
+    const location  = document.getElementById("report-location").value;
+    const crimeType = document.getElementById("report-crime-type").value;
+
+    const body = { type };
+    if (type === "location" && location)  body.location   = location;
+    if (type === "type"     && crimeType) body.crime_type = crimeType;
+
+    const res  = await fetch(`${API}/api/reports/generate`, {
+      method:"POST", credentials:"include",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    currentReport = data.report;
+
+    document.getElementById("report-preview").classList.remove("hidden");
+    document.getElementById("report-title").textContent  = data.report.title;
+    document.getElementById("report-meta").textContent   = `Generated: ${data.report.generated_at} · Filters: ${JSON.stringify(data.report.filters)}`;
+    document.getElementById("rp-total").textContent      = data.report.summary.total_crimes;
+    document.getElementById("rp-recs").textContent       = data.report.summary.total_records;
+
+    const typeEntries  = Object.entries(data.report.by_crime_type).map(([k,v]) => ({label:k, count:v}));
+    const locEntries   = Object.entries(data.report.by_location).map(([k,v])   => ({label:k, count:v})).sort((a,b) => b.count-a.count);
+    const monthEntries = Object.entries(data.report.by_month).map(([k,v])      => ({label:k, count:v}));
+
+    makeBarChart("rp-type-chart",  typeEntries,  "label", "count", "#e02424");
+    makeBarChart("rp-loc-chart",   locEntries,   "label", "count", "#1a56db");
+    makeBarChart("rp-month-chart", monthEntries, "label", "count", "#057a55");
+
+    document.getElementById("rp-records-body").innerHTML = data.report.records.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td><strong>${r.location}</strong></td>
+        <td>${r.district}</td>
+        <td>${r.type}</td>
+        <td>${r.date}</td>
+        <td><strong>${r.count}</strong></td>
+      </tr>`).join("");
+
+    window.scrollTo({ top: 0, behavior:"smooth" });
+    loadReportsList();
+  }
+
+  function downloadReport() {
+    if (!currentReport) return;
+    const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type:"application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `crime-report-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function loadReportsList() {
+    const res  = await fetch(`${API}/api/reports/list`, { credentials:"include" });
+    const data = await res.json();
+    const tbody = document.getElementById("reports-list-body");
+    if (!data.reports.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">No reports yet.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.reports.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td><strong>${r.title}</strong></td>
+        <td>${r.generated_at}</td>
+        <td>${r.total_crimes}</td>
+        <td><button class="btn-secondary" onclick="viewReport(${r.id})" style="padding:5px 12px;font-size:12px;">👁 View</button></td>
+      </tr>`).join("");
+  }
+
+  async function viewReport(id) {
+    const res  = await fetch(`${API}/api/reports/${id}`, { credentials:"include" });
+    const data = await res.json();
+    currentReport = data;
+    document.getElementById("report-preview").classList.remove("hidden");
+    document.getElementById("report-title").textContent = data.title;
+    document.getElementById("rp-total").textContent     = data.summary.total_crimes;
+    document.getElementById("rp-recs").textContent      = data.summary.total_records;
+    window.scrollTo({ top:0, behavior:"smooth" });
+  }
+
+  loadDropdowns();
+  loadReportsList();
+</script>
+</body>
+</html>

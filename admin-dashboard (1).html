@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Dashboard — Crime Rate Detection</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h2 class="page-title">Admin Dashboard</h2>
+    <p class="page-subtitle">Manage datasets, users, and system overview</p>
+
+    <div class="stats-grid">
+      <div class="stat-card danger">  <div class="label">Total Crimes</div>    <div class="value" id="s-total">—</div></div>
+      <div class="stat-card info">    <div class="label">Datasets Uploaded</div><div class="value" id="s-datasets">—</div></div>
+      <div class="stat-card warning"> <div class="label">Reports Generated</div><div class="value" id="s-reports">—</div></div>
+      <div class="stat-card success"> <div class="label">Locations Tracked</div><div class="value" id="s-locs">—</div></div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>Quick Actions</h3></div>
+      <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button class="btn-primary" onclick="location.href='dataset.html'" style="width:auto;padding:10px 20px;">📂 Upload Dataset</button>
+        <button class="btn-secondary" onclick="location.href='reports.html'">📄 Generate Report</button>
+        <button class="btn-secondary" onclick="location.href='alerts.html'">🚨 View Alerts</button>
+        <button class="btn-secondary" onclick="location.href='user-dashboard.html'">📊 Full Dashboard</button>
+      </div>
+    </div>
+
+    <!-- Auto Alerts -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>🚨 Active Crime Alerts</h3></div>
+      <div class="card-body" id="alerts-body">
+        <p style="color:var(--muted);font-size:14px">Loading alerts...</p>
+      </div>
+    </div>
+
+    <!-- All Safety Scores -->
+    <div class="card">
+      <div class="card-header"><h3>Safety Scores by Location</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Location</th><th>Total Crimes</th><th>Safety Score</th><th>Risk Level</th></tr></thead>
+          <tbody id="scores-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/common.js"></script>
+<script>
+  initPage("admin");
+
+  async function load() {
+    // Stats
+    const res  = await fetch(`${API}/api/reports/dashboard-stats`, { credentials: "include" });
+    const data = await res.json();
+    document.getElementById("s-total").textContent    = data.total_crimes;
+    document.getElementById("s-locs").textContent     = data.total_locations;
+    document.getElementById("s-reports").textContent  = data.total_reports;
+
+    const ds = await fetch(`${API}/api/dataset/list`, { credentials: "include" });
+    const dd = await ds.json();
+    document.getElementById("s-datasets").textContent = dd.count;
+
+    // Auto alerts
+    const ar  = await fetch(`${API}/api/alerts/auto`, { credentials: "include" });
+    const ald = await ar.json();
+    const alertsDiv = document.getElementById("alerts-body");
+    if (ald.alerts.length === 0) {
+      alertsDiv.innerHTML = `<p style="color:var(--success);font-size:14px">✅ No high-risk alerts at this time.</p>`;
+    } else {
+      alertsDiv.innerHTML = ald.alerts.map(a => `
+        <div class="alert-item ${a.risk_level === 'Extreme Risk' ? 'extreme' : 'high'}">
+          <span class="alert-icon">${a.risk_level === 'Extreme Risk' ? '🔴' : '🟠'}</span>
+          <div class="alert-text">
+            <strong>${a.location} — ${a.risk_level}</strong>
+            <span>${a.total} crimes recorded · Safety Score: ${a.score}/100</span>
+          </div>
+        </div>`).join("");
+    }
+
+    // Scores table
+    const sr  = await fetch(`${API}/api/alerts/all-scores`, { credentials: "include" });
+    const sd  = await sr.json();
+    document.getElementById("scores-body").innerHTML = sd.scores.map(s => `
+      <tr>
+        <td><strong>${s.location}</strong></td>
+        <td>${s.total}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+              <div style="width:${s.score}%;height:100%;background:${s.score>70?'var(--success)':s.score>40?'var(--warning)':'var(--danger)'};border-radius:4px"></div>
+            </div>
+            <span style="font-size:13px;font-weight:600">${s.score}</span>
+          </div>
+        </td>
+        <td>${riskBadge(s.risk_level)}</td>
+      </tr>`).join("");
+  }
+
+  load();
+</script>
+</body>
+</html>

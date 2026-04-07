@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Crime Trends — Crime Rate Detection</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="dashboard-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h2 class="page-title">Crime Trends</h2>
+    <p class="page-subtitle">Monthly and hourly crime patterns</p>
+
+    <!-- Monthly Trend -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>📅 Monthly Crime Trend</h3></div>
+      <div class="card-body"><div class="bar-chart" id="monthly-chart"></div></div>
+    </div>
+
+    <!-- Hourly Pattern -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>🕐 Crime by Hour of Day</h3></div>
+      <div class="card-body"><div class="bar-chart" id="hourly-chart"></div></div>
+    </div>
+
+    <!-- Peak Info Cards -->
+    <div class="stats-grid" style="margin-bottom:24px;">
+      <div class="stat-card danger">  <div class="label">Peak Month</div>     <div class="value" id="peak-month"  style="font-size:20px">—</div></div>
+      <div class="stat-card warning"> <div class="label">Peak Hour</div>       <div class="value" id="peak-hour"   style="font-size:20px">—</div></div>
+      <div class="stat-card info">    <div class="label">Peak Day</div>        <div class="value" id="peak-day"    style="font-size:20px">—</div></div>
+      <div class="stat-card success"> <div class="label">Quietest Month</div>  <div class="value" id="quiet-month" style="font-size:20px">—</div></div>
+    </div>
+
+    <!-- Per-location trends -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Trend by Location</h3>
+        <select id="loc-select" onchange="loadLocationTrend()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;">
+          <option value="">All Locations</option>
+        </select>
+      </div>
+      <div class="card-body"><div class="bar-chart" id="loc-trend-chart"></div></div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/common.js"></script>
+<script>
+  initPage("trends");
+
+  async function load() {
+    // Monthly trends
+    const tr   = await fetch(`${API}/api/analysis/trends`, { credentials: "include" });
+    const td   = await tr.json();
+    const maxT = Math.max(...td.trends.map(t => t.total), 1);
+    document.getElementById("monthly-chart").innerHTML = td.trends.map(t => `
+      <div class="bar-row">
+        <div class="bar-label">${t.month}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.round(t.total/maxT*100)}%;background:var(--primary)">
+            <span>${t.total}</span>
+          </div>
+        </div>
+      </div>`).join("");
+
+    const peakMonth  = td.trends.reduce((a,b) => a.total > b.total ? a : b, {month:"—",total:0});
+    const quietMonth = td.trends.reduce((a,b) => a.total < b.total ? a : b, {month:"—",total:999999});
+    document.getElementById("peak-month").textContent  = peakMonth.month;
+    document.getElementById("quiet-month").textContent = quietMonth.month;
+
+    // Hourly pattern
+    const hr   = await fetch(`${API}/api/analysis/by-hour`, { credentials: "include" });
+    const hd   = await hr.json();
+    const maxH = Math.max(...hd.by_hour.map(h => h.count), 1);
+    const peakH = hd.by_hour.reduce((a,b) => a.count > b.count ? a : b, {hour:22,count:0});
+    document.getElementById("peak-hour").textContent = `${peakH.hour}:00`;
+
+    // Show only hours with data for cleaner chart
+    const activeHours = hd.by_hour.filter(h => h.count > 0);
+    document.getElementById("hourly-chart").innerHTML = activeHours.map(h => `
+      <div class="bar-row">
+        <div class="bar-label">${h.hour}:00</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.round(h.count/maxH*100)}%;background:#e02424">
+            <span>${h.count}</span>
+          </div>
+        </div>
+      </div>`).join("");
+
+    // Peak day (from peak-time API)
+    const pr = await fetch(`${API}/api/alerts/peak-time`, { credentials: "include" });
+    const pd = await pr.json();
+    document.getElementById("peak-day").textContent = pd.peak_day;
+
+    // Location dropdown
+    const sr   = await fetch(`${API}/api/analysis/summary`, { credentials: "include" });
+    const sd   = await sr.json();
+    const sel  = document.getElementById("loc-select");
+    sd.locations.forEach(loc => {
+      const opt = document.createElement("option");
+      opt.value = opt.textContent = loc;
+      sel.appendChild(opt);
+    });
+
+    loadLocationTrend();
+  }
+
+  async function loadLocationTrend() {
+    const loc  = document.getElementById("loc-select").value;
+    const url  = loc
+      ? `${API}/api/alerts/peak-time?location=${encodeURIComponent(loc)}`
+      : `${API}/api/alerts/peak-time`;
+    const res  = await fetch(url, { credentials: "include" });
+    const data = await res.json();
+
+    const maxD = Math.max(...data.daily_data.map(d => d.count), 1);
+    document.getElementById("loc-trend-chart").innerHTML = data.daily_data.map(d => `
+      <div class="bar-row">
+        <div class="bar-label">${d.day}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.round(d.count/maxD*100)}%;background:var(--success)">
+            <span>${d.count}</span>
+          </div>
+        </div>
+      </div>`).join("");
+  }
+
+  load();
+</script>
+</body>
+</html>
